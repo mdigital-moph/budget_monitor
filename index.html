@@ -273,7 +273,8 @@
     </main>
 
     <script>
-        // *** 🚨 IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR GOOGLE APPS SCRIPT WEB APP URL 🚨 ***
+        // *** 🚨 สำคัญมาก: คุณต้องแทนที่ข้อความข้างล่างนี้ด้วย URL ที่ได้จากการ Deploy Google Apps Script Web App 🚨 ***
+        // URL ที่ถูกต้องจะเริ่มต้นด้วย https://script.google.com/macros/s/.../exec
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec'; 
 
         // Global state for application data
@@ -328,6 +329,8 @@
                 box.classList.add('bg-green-500', 'opacity-100');
             } else if (type === 'error') {
                 box.classList.add('bg-red-500', 'opacity-100');
+            } else if (type === 'info') {
+                box.classList.add('bg-blue-500', 'opacity-100');
             }
 
             setTimeout(() => {
@@ -344,6 +347,11 @@
             
             for (let i = 0; i < retries; i++) {
                 try {
+                    // Check if URL is still the placeholder
+                    if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec) {
+                         throw new Error("GAS_WEB_APP_URL ยังไม่ได้ถูกแทนที่ กรุณาตรวจสอบและแก้ไขในโค้ด HTML");
+                    }
+                    
                     const response = await fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -351,7 +359,9 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        // Attempt to read the error response body if possible
+                        const errorText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}. Response: ${errorText.substring(0, 100)}...`);
                     }
 
                     const result = await response.json();
@@ -385,6 +395,7 @@
                 console.log("Data loaded successfully:", appData);
                 populateDropdowns();
                 renderAllViews();
+                showMessage('โหลดข้อมูลสำเร็จ', 'success');
             } catch (error) {
                 // Error handled in apiCall, but useful for initial load failure
                 console.error("Initial data fetch failed.");
@@ -552,7 +563,11 @@
                 // Edit Button (Placeholder - In this view, we primarily view the summary derived from Allocation and Control)
                 const editCell = row.insertCell();
                 editCell.className = 'px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
-                editCell.innerHTML = `<button onclick="editPlan(${item.rowId}, '${item.โครงการ}', '${item.กลุ่มงาน}')" class="text-blue-600 hover:text-blue-900" title="แก้ไขแผนงบประมาณ">
+                // Find the specific planning row ID for editing the plan budget, if it exists
+                const planRecord = appData.planning.data.find(p => p['โครงการ'] === item.โครงการ && p['กลุ่มงาน'] === item.กลุ่มงาน);
+                const planRowId = planRecord ? planRecord.rowId : '';
+                
+                editCell.innerHTML = `<button onclick="editPlan(${planRowId}, '${item.โครงการ}', '${item.กลุ่มงาน}')" class="text-blue-600 hover:text-blue-900" title="แก้ไขแผนงบประมาณ">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-7l4 4m-4-4L9 9m10-4a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                                       </button>`;
 
