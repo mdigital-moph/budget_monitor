@@ -275,7 +275,7 @@
     <script>
         // *** 🚨 สำคัญมาก: คุณต้องแทนที่ข้อความข้างล่างนี้ด้วย URL ที่ได้จากการ Deploy Google Apps Script Web App 🚨 ***
         // URL ที่ถูกต้องจะเริ่มต้นด้วย https://script.google.com/macros/s/.../exec
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec'; 
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx_cjO365Kr0oDdFB0GTL_-umnKnNzRdtHaOIs9Nela67x62cwWPaQ1HQejENRcm9g0/exec'; 
 
         // Global state for application data
         let appData = {
@@ -348,7 +348,7 @@
             for (let i = 0; i < retries; i++) {
                 try {
                     // Check if URL is still the placeholder
-                    if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec) {
+                    if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbx_cjO365Kr0oDdFB0GTL_-umnKnNzRdtHaOIs9Nela67x62cwWPaQ1HQejENRcm9g0/exec') {
                          throw new Error("GAS_WEB_APP_URL ยังไม่ได้ถูกแทนที่ กรุณาตรวจสอบและแก้ไขในโค้ด HTML");
                     }
                     
@@ -1089,7 +1089,7 @@
 
         // Initial Load
         window.onload = () => {
-             if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec') {
+             if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbx_cjO365Kr0oDdFB0GTL_-umnKnNzRdtHaOIs9Nela67x62cwWPaQ1HQejENRcm9g0/exec') {
                 showMessage("🚨 กรุณาแทนที่ 'YOUR_GAS_WEB_APP_URL_HERE' ด้วย URL ของ Google Apps Script Web App ที่ Deploy แล้ว", 'error');
                 return;
              }
