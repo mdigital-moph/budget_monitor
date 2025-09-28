@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบควบคุมงบประมาณ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js for Dashboard Charts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+Thai:wght@100..900&display=swap');
+        body {
+            font-family: 'Noto Sans Thai', 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .nav-active {
+            @apply bg-blue-700 text-white shadow-xl;
+        }
+        .input-style {
+            @apply w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out;
+        }
+        .btn-primary {
+            @apply bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-200 ease-in-out shadow-lg transform hover:scale-[1.01];
+        }
+        .btn-secondary {
+            @apply bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-200 ease-in-out;
+        }
+        /* Custom styles for D3 charts */
+        .chart-container svg {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-blue-600 shadow-xl sticky top-0 z-10">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <h1 class="text-3xl font-extrabold text-white text-center">
+                ระบบควบคุมงบประมาณ (เชื่อม Google Sheet)
+            </h1>
+        </div>
+    </header>
+    
+    <!-- Navigation Tabs -->
+    <nav class="bg-blue-500 shadow-md">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-wrap justify-center sm:justify-start">
+                <button onclick="showView('notify')" id="nav-notify" class="p-4 text-white text-sm sm:text-base font-medium rounded-t-lg transition duration-200 hover:bg-blue-700 nav-active">แจ้งจัดสรร</button>
+                <button onclick="showView('allocate')" id="nav-allocate" class="p-4 text-white text-sm sm:text-base font-medium rounded-t-lg transition duration-200 hover:bg-blue-700">จัดสรรงบประมาณ</button>
+                <button onclick="showView('plan')" id="nav-plan" class="p-4 text-white text-sm sm:text-base font-medium rounded-t-lg transition duration-200 hover:bg-blue-700">แผนงบประมาณ</button>
+                <button onclick="showView('control')" id="nav-control" class="p-4 text-white text-sm sm:text-base font-medium rounded-t-lg transition duration-200 hover:bg-blue-700">คุมงบประมาณ</button>
+                <button onclick="showView('dashboard')" id="nav-dashboard" class="p-4 text-white text-sm sm:text-base font-medium rounded-t-lg transition duration-200 hover:bg-blue-700">Dashboard</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="container mx-auto p-4 sm:p-8 flex-grow">
+        
+        <!-- Loading Indicator and Message Box -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-xl shadow-2xl flex items-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-4"></div>
+                <span class="text-lg text-blue-600 font-semibold">กำลังโหลด/บันทึกข้อมูล...</span>
+            </div>
+        </div>
+        <div id="message-box" class="fixed top-20 right-4 p-4 rounded-lg shadow-xl text-white font-semibold transition-opacity duration-300 opacity-0 z-50"></div>
+
+        <!-- View Containers -->
+        <div id="notify-view" class="view-container">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6 border-b pb-2">1. แจ้งจัดสรร (ข้อมูลตั้งต้น)</h2>
+            <form id="notify-form" class="bg-white p-6 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-2 gap-6">
+                <label class="block">
+                    <span class="text-gray-700">แผนงาน:</span>
+                    <input type="text" name="แผนงาน" class="input-style" required>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">ผลผลิต/โครงการ:</span>
+                    <input type="text" name="ผลผลิต/โครงการ" class="input-style" required>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">กิจกรรมหลัก:</span>
+                    <input type="text" name="กิจกรรมหลัก" class="input-style" required>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">รหัสโครงการ:</span>
+                    <input type="text" name="รหัสโครงการ" class="input-style" required>
+                </label>
+                <label class="block md:col-span-2">
+                    <span class="text-gray-700">รหัสงบประมาณ:</span>
+                    <input type="text" name="รหัสงบประมาณ" class="input-style" required>
+                </label>
+                <div class="md:col-span-2 mt-4 flex justify-end">
+                    <button type="submit" class="btn-primary">บันทึกแจ้งจัดสรร</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="allocate-view" class="view-container hidden">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6 border-b pb-2">2. จัดสรรงบประมาณ</h2>
+            <form id="allocate-form" class="bg-white p-6 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Dropdowns from Allocation data (or manual input if empty) -->
+                <label class="block">
+                    <span class="text-gray-700">แผนงาน (จากแจ้งจัดสรร):</span>
+                    <select name="แผนงาน" class="input-style" required id="alloc-plan-select"></select>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">ผลผลิต/โครงการ (จากแจ้งจัดสรร):</span>
+                    <select name="ผลผลิต/โครงการ" class="input-style" required id="alloc-product-select"></select>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">กิจกรรมหลัก (จากแจ้งจัดสรร):</span>
+                    <select name="กิจกรรมหลัก" class="input-style" required id="alloc-activity-select"></select>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">โครงการ:</span>
+                    <input type="text" name="โครงการ" class="input-style" required>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">งบประมาณ:</span>
+                    <input type="number" name="งบประมาณ" class="input-style" required min="0">
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">รหัสโครงการ (จากแจ้งจัดสรร):</span>
+                    <select name="รหัสโครงการ" class="input-style" required id="alloc-projcode-select"></select>
+                </label>
+                <label class="block">
+                    <span class="text-gray-700">รหัสงบประมาณ (จากแจ้งจัดสรร):</span>
+                    <select name="รหัสงบประมาณ" class="input-style" required id="alloc-budgetcode-select"></select>
+                </label>
+                <!-- Dropdown for กลุ่มงาน -->
+                <label class="block">
+                    <span class="text-gray-700">กลุ่มงาน:</span>
+                    <select name="กลุ่มงาน" class="input-style" required id="alloc-group-select"></select>
+                </label>
+
+                <div class="md:col-span-2 mt-4 flex justify-end">
+                    <button type="submit" class="btn-primary">บันทึกจัดสรรงบ</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="plan-view" class="view-container hidden">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6 border-b pb-2">3. แผนงบประมาณ</h2>
+            
+            <div id="plan-form-area" class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h3 class="text-xl font-semibold text-blue-700 mb-4">บันทึกแผนรายโครงการ</h3>
+                <form id="plan-form" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <input type="hidden" name="rowId" id="plan-rowId">
+                    <label class="block">
+                        <span class="text-gray-700">โครงการ:</span>
+                        <select name="โครงการ" class="input-style" required id="plan-project-select"></select>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">กลุ่มงาน:</span>
+                        <select name="กลุ่มงาน" class="input-style" required id="plan-group-select"></select>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">งบประมาณ (แผน):</span>
+                        <input type="number" name="งบประมาณ (แผน)" class="input-style" required min="0">
+                    </label>
+                    <div class="md:col-span-3 mt-4 flex justify-end space-x-4">
+                        <button type="button" onclick="resetPlanForm()" id="plan-cancel-btn" class="btn-secondary hidden">ยกเลิกแก้ไข</button>
+                        <button type="submit" class="btn-primary" id="plan-submit-btn">บันทึกแผนงบประมาณ</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mt-8 overflow-x-auto bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-blue-700">สรุปแผนงบประมาณ</h3>
+                    <button onclick="exportTableToCSV('plan-summary-table', 'แผนงบประมาณ.csv')" class="btn-secondary flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2v5H3v-5h2M17 9V3H7v6M7 17v-8h10v8H7z"></path></svg>
+                        ส่งออก Excel
+                    </button>
+                </div>
+                <table id="plan-summary-table" class="min-w-full divide-y divide-blue-200">
+                    <thead class="bg-blue-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">แก้ไข</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กลุ่มงาน</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผลผลิต/โครงการ</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กิจกรรมหลัก</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">โครงการ</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัสโครงการ</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">งบที่ได้รับ</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">งบใช้จริง</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">งบคงเหลือ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="plan-summary-tbody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="control-view" class="view-container hidden">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6 border-b pb-2">4. คุมงบประมาณ</h2>
+            <div id="control-form-area" class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h3 class="text-xl font-semibold text-blue-700 mb-4">บันทึกรายจ่าย (ใช้จริง)</h3>
+                <form id="control-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <input type="hidden" name="rowId" id="control-rowId">
+                    <label class="block">
+                        <span class="text-gray-700">โครงการ:</span>
+                        <select name="โครงการ" class="input-style" required id="control-project-select"></select>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">กิจกรรมที่ดำเนินการ:</span>
+                        <input type="text" name="กิจกรรมที่ดำเนินการ" class="input-style" required>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">กลุ่มงาน:</span>
+                        <select name="กลุ่มงาน" class="input-style" required id="control-group-select"></select>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">ผูกพัน/ตัดงบ:</span>
+                        <input type="number" name="ผูกพัน/ตัดงบ" class="input-style" required min="0" id="control-commitment">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">งบประมาณใช้จริง:</span>
+                        <input type="number" name="งบประมาณใช้จริง" class="input-style" required min="0" id="control-actual">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">หมวดค่าใช้จ่าย:</span>
+                        <select name="หมวดค่าใช้จ่าย" class="input-style" required id="control-expense-select"></select>
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-700">คงเหลือ (คำนวณ):</span>
+                        <input type="text" name="คงเหลือ" class="input-style bg-blue-100 font-bold text-blue-800" readonly id="control-remaining">
+                    </label>
+                    <div class="md:col-span-3 mt-4 flex justify-end space-x-4">
+                        <button type="button" onclick="resetControlForm()" id="control-cancel-btn" class="btn-secondary hidden">ยกเลิกแก้ไข</button>
+                        <button type="submit" class="btn-primary" id="control-submit-btn">บันทึกคุมงบประมาณ</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mt-8 overflow-x-auto bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold text-blue-700 mb-4">ตารางสรุปข้อมูลคุมงบประมาณ</h3>
+                <div id="control-summary-container">
+                    <!-- Summary tables grouped by กลุ่มงาน will be inserted here -->
+                </div>
+            </div>
+        </div>
+        
+        <div id="dashboard-view" class="view-container hidden">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6 border-b pb-2">5. Dashboard</h2>
+            <div id="dashboard-content" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Chart 1: Budget Type Comparison -->
+                <div class="bg-white p-6 rounded-xl shadow-lg chart-container">
+                    <h3 class="text-xl font-semibold text-blue-700 mb-4">กราฟแยกตามประเภทงบประมาณ (งบที่ได้รับ vs ใช้ไป)</h3>
+                    <div id="chart-budget-type"></div>
+                </div>
+
+                <!-- Chart 2: Group Comparison -->
+                <div class="bg-white p-6 rounded-xl shadow-lg chart-container">
+                    <h3 class="text-xl font-semibold text-blue-700 mb-4">กราฟแยกตามกลุ่มงาน (งบที่ได้รับ vs ใช้ไป)</h3>
+                    <div id="chart-group-comparison"></div>
+                </div>
+                
+                <!-- Chart 3: Plan Comparison -->
+                <div class="bg-white p-6 rounded-xl shadow-lg lg:col-span-2 chart-container">
+                    <h3 class="text-xl font-semibold text-blue-700 mb-4">กราฟแยกตามแผนงาน (งบที่ได้รับ vs ใช้ไป)</h3>
+                    <div id="chart-plan-comparison"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // *** 🚨 IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR GOOGLE APPS SCRIPT WEB APP URL 🚨 ***
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec'; 
+
+        // Global state for application data
+        let appData = {
+            allocation: { headers: [], data: [] },
+            planning: { headers: [], data: [] },
+            control: { headers: [], data: [] },
+            dropdowns: { groups: [], expenseCategories: [], projects: [], projectCodes: [], budgetCodes: [], mainActivities: [], products: [], plans: [] }
+        };
+
+        const elements = {
+            loading: document.getElementById('loading'),
+            messageBox: document.getElementById('message-box'),
+            // Forms
+            notifyForm: document.getElementById('notify-form'),
+            allocateForm: document.getElementById('allocate-form'),
+            planForm: document.getElementById('plan-form'),
+            controlForm: document.getElementById('control-form'),
+            // Dropdowns (Allocate)
+            allocPlanSelect: document.getElementById('alloc-plan-select'),
+            allocProductSelect: document.getElementById('alloc-product-select'),
+            allocActivitySelect: document.getElementById('alloc-activity-select'),
+            allocProjCodeSelect: document.getElementById('alloc-projcode-select'),
+            allocBudgetCodeSelect: document.getElementById('alloc-budgetcode-select'),
+            allocGroupSelect: document.getElementById('alloc-group-select'),
+            // Dropdowns (Plan)
+            planProjectSelect: document.getElementById('plan-project-select'),
+            planGroupSelect: document.getElementById('plan-group-select'),
+            planSummaryTbody: document.getElementById('plan-summary-tbody'),
+            // Dropdowns (Control)
+            controlProjectSelect: document.getElementById('control-project-select'),
+            controlGroupSelect: document.getElementById('control-group-select'),
+            controlExpenseSelect: document.getElementById('control-expense-select'),
+            controlCommitment: document.getElementById('control-commitment'),
+            controlActual: document.getElementById('control-actual'),
+            controlRemaining: document.getElementById('control-remaining'),
+            controlSummaryContainer: document.getElementById('control-summary-container')
+        };
+
+
+        // --- Core Utilities: API Communication and UI ---
+
+        /**
+         * Shows a transient message (Success/Error).
+         */
+        function showMessage(message, type = 'success') {
+            const box = elements.messageBox;
+            box.textContent = message;
+            box.className = 'fixed top-20 right-4 p-4 rounded-lg shadow-xl text-white font-semibold transition-opacity duration-300 z-50';
+
+            if (type === 'success') {
+                box.classList.add('bg-green-500', 'opacity-100');
+            } else if (type === 'error') {
+                box.classList.add('bg-red-500', 'opacity-100');
+            }
+
+            setTimeout(() => {
+                box.classList.remove('opacity-100');
+            }, 3000);
+        }
+
+        /**
+         * Generic API call with retry mechanism (Exponential Backoff).
+         */
+        async function apiCall(action, data = {}, retries = 3) {
+            elements.loading.classList.remove('hidden');
+            const payload = { action, data };
+            
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    elements.loading.classList.add('hidden');
+                    if (result.status === 'success') {
+                        return result.data;
+                    } else {
+                        throw new Error(result.message || 'Error from Google Apps Script.');
+                    }
+
+                } catch (error) {
+                    console.error(`API Call failed (Attempt ${i + 1}/${retries}):`, error);
+                    if (i === retries - 1) {
+                        elements.loading.classList.add('hidden');
+                        showMessage(`ไม่สามารถเชื่อมต่อ/บันทึกข้อมูลได้: ${error.message}`, 'error');
+                        throw error;
+                    }
+                    // Exponential Backoff
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                }
+            }
+        }
+        
+        /**
+         * Fetches all budget data from Google Sheet.
+         */
+        async function fetchData() {
+            try {
+                const data = await apiCall('get_data');
+                appData = data;
+                console.log("Data loaded successfully:", appData);
+                populateDropdowns();
+                renderAllViews();
+            } catch (error) {
+                // Error handled in apiCall, but useful for initial load failure
+                console.error("Initial data fetch failed.");
+            }
+        }
+        
+        /**
+         * Handles form submission for saving data.
+         */
+        async function handleFormSubmit(event, action, successMessage) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                // Convert numbers for numerical fields
+                if (['งบประมาณ', 'งบประมาณ (แผน)', 'ผูกพัน/ตัดงบ', 'งบประมาณใช้จริง'].includes(key)) {
+                    data[key] = parseFloat(value) || 0;
+                } else {
+                    data[key] = value;
+                }
+            }
+
+            // Handle Update vs Save logic
+            let finalAction = action;
+            if (['save_planning', 'save_control'].includes(action)) {
+                if (data.rowId) {
+                    finalAction = action.replace('save', 'update');
+                }
+            }
+            
+            try {
+                await apiCall(finalAction, data);
+                showMessage(successMessage);
+                form.reset();
+                if (action === 'save_planning') resetPlanForm();
+                if (action === 'save_control') resetControlForm();
+                // Refresh data after successful save/update
+                await fetchData(); 
+            } catch (error) {
+                // Error handled in apiCall
+            }
+        }
+
+        // --- View Logic and Rendering ---
+
+        function showView(viewId) {
+            document.querySelectorAll('.view-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`${viewId}-view`).classList.remove('hidden');
+
+            document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('nav-active'));
+            document.getElementById(`nav-${viewId}`).classList.add('nav-active');
+
+            if (viewId === 'dashboard') {
+                renderDashboard();
+            } else {
+                // Re-render other views if data updated
+                renderAllViews();
+            }
+        }
+
+        function renderAllViews() {
+            renderPlanSummary();
+            renderControlSummary();
+        }
+
+        // --- Dropdown Population ---
+
+        function populateDropdown(selectElement, items, isGroup = false) {
+            selectElement.innerHTML = '<option value="" disabled selected>--- เลือก ---</option>';
+            if (isGroup) {
+                // Add Group list items
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item;
+                    option.textContent = item;
+                    selectElement.appendChild(option);
+                });
+            } else {
+                // Add items from fetched data
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item;
+                    option.textContent = item;
+                    selectElement.appendChild(option);
+                });
+            }
+        }
+
+        function populateDropdowns() {
+            const d = appData.dropdowns;
+            
+            // 2. จัดสรรงบประมาณ Dropdowns (d.plans, d.products, d.groups etc. come from Allocation/GAS defined lists)
+            populateDropdown(elements.allocPlanSelect, d.plans);
+            populateDropdown(elements.allocProductSelect, d.products);
+            populateDropdown(elements.allocActivitySelect, d.mainActivities);
+            populateDropdown(elements.allocProjCodeSelect, d.projectCodes);
+            populateDropdown(elements.allocBudgetCodeSelect, d.budgetCodes);
+            populateDropdown(elements.allocGroupSelect, d.groups, true); // Groups are fixed list
+
+            // 3. แผนงบประมาณ Dropdowns (Projects and Groups from Allocation Data)
+            populateDropdown(elements.planProjectSelect, d.projects);
+            populateDropdown(elements.planGroupSelect, d.groups, true); // Groups are fixed list
+
+            // 4. คุมงบประมาณ Dropdowns (Projects from Allocation Data, Groups, Expense Categories)
+            populateDropdown(elements.controlProjectSelect, d.projects);
+            populateDropdown(elements.controlGroupSelect, d.groups, true); // Groups are fixed list
+            populateDropdown(elements.controlExpenseSelect, d.expenseCategories, true); // Expense Categories are fixed list
+        }
+
+        // --- 3. แผนงบประมาณ Logic ---
+
+        function getRelatedAllocationData(project) {
+            return appData.allocation.data.find(row => row['โครงการ'] === project) || {};
+        }
+        
+        function renderPlanSummary() {
+            const tableBody = elements.planSummaryTbody;
+            tableBody.innerHTML = '';
+            
+            // 1. Group planning data by project
+            const planningMap = new Map();
+            appData.planning.data.forEach(p => {
+                // Use Planning's Project name as key, and 'งบประมาณ (แผน)' as value
+                planningMap.set(p['โครงการ'], (planningMap.get(p['โครงการ']) || 0) + (parseFloat(p['งบประมาณ (แผน)']) || 0));
+            });
+
+            // 2. Group control data by project (Actual spending)
+            const controlMap = new Map();
+            appData.control.data.forEach(c => {
+                // Use Control's Project name as key, and 'งบประมาณใช้จริง' as value
+                controlMap.set(c['โครงการ'], (controlMap.get(c['โครงการ']) || 0) + (parseFloat(c['งบประมาณใช้จริง']) || 0));
+            });
+            
+            // 3. Aggregate all Allocation data (Budget Received)
+            const summaryData = appData.allocation.data.map(alloc => {
+                const project = alloc['โครงการ'];
+                const received = parseFloat(alloc['งบประมาณ']) || 0;
+                const used = controlMap.get(project) || 0;
+                const remaining = received - used;
+
+                return {
+                    กลุ่มงาน: alloc['กลุ่มงาน'],
+                    'ผลผลิต/โครงการ': alloc['ผลผลิต/โครงการ'],
+                    กิจกรรมหลัก: alloc['กิจกรรมหลัก'],
+                    โครงการ: project,
+                    รหัสโครงการ: alloc['รหัสโครงการ'],
+                    งบที่ได้รับ: received,
+                    งบที่ใช้จริง: used,
+                    งบคงเหลือ: remaining,
+                    rowId: alloc.rowId // Use allocation's rowId for data reference, although planning/control have their own rowIds
+                };
+            }).sort((a, b) => {
+                // Sort by กลุ่มงาน, then ผลผลิต/โครงการ, then กิจกรรมหลัก
+                if (a['กลุ่มงาน'] !== b['กลุ่มงาน']) return a['กลุ่มงาน'].localeCompare(b['กลุ่มงาน']);
+                if (a['ผลผลิต/โครงการ'] !== b['ผลผลิต/โครงการ']) return a['ผลผลิต/โครงการ'].localeCompare(b['ผลผลิต/โครงการ']);
+                return a['กิจกรรมหลัก'].localeCompare(b['กิจกรรมหลัก']);
+            });
+
+
+            summaryData.forEach(item => {
+                const row = tableBody.insertRow();
+                row.className = 'hover:bg-blue-50';
+
+                // Edit Button (Placeholder - In this view, we primarily view the summary derived from Allocation and Control)
+                const editCell = row.insertCell();
+                editCell.className = 'px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
+                editCell.innerHTML = `<button onclick="editPlan(${item.rowId}, '${item.โครงการ}', '${item.กลุ่มงาน}')" class="text-blue-600 hover:text-blue-900" title="แก้ไขแผนงบประมาณ">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-7l4 4m-4-4L9 9m10-4a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                      </button>`;
+
+                row.insertCell().textContent = item['กลุ่มงาน'];
+                row.insertCell().textContent = item['ผลผลิต/โครงการ'];
+                row.insertCell().textContent = item['กิจกรรมหลัก'];
+                row.insertCell().textContent = item['โครงการ'];
+                row.insertCell().textContent = item['รหัสโครงการ'];
+                
+                // Budget Numbers (Right-aligned)
+                row.insertCell().outerHTML = `<td class="px-3 py-4 whitespace-nowrap text-right text-sm font-bold text-green-700">${item['งบที่ได้รับ'].toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>`;
+                row.insertCell().outerHTML = `<td class="px-3 py-4 whitespace-nowrap text-right text-sm font-bold text-red-700">${item['งบที่ใช้จริง'].toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>`;
+                row.insertCell().outerHTML = `<td class="px-3 py-4 whitespace-nowrap text-right text-sm font-bold text-blue-700">${item['งบคงเหลือ'].toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>`;
+            });
+        }
+        
+        // This function is for editing the 'Plan' budget amount specifically
+        function editPlan(rowId, project, group) {
+            const planningRecord = appData.planning.data.find(p => p.rowId === rowId && p['โครงการ'] === project);
+            
+            if (planningRecord) {
+                // Populate form for editing existing planning record
+                document.getElementById('plan-rowId').value = rowId;
+                elements.planProjectSelect.value = planningRecord['โครงการ'];
+                elements.planGroupSelect.value = planningRecord['กลุ่มงาน'];
+                elements.planForm.elements['งบประมาณ (แผน)'].value = planningRecord['งบประมาณ (แผน)'];
+                
+                document.getElementById('plan-submit-btn').textContent = 'บันทึกแก้ไขแผน';
+                document.getElementById('plan-cancel-btn').classList.remove('hidden');
+                showMessage(`กำลังแก้ไขแผนของโครงการ: ${project}`, 'info');
+
+            } else {
+                // Populate form for a *new* planning entry for this project/group combination
+                document.getElementById('plan-rowId').value = '';
+                elements.planProjectSelect.value = project;
+                elements.planGroupSelect.value = group;
+                elements.planForm.elements['งบประมาณ (แผน)'].value = '';
+
+                document.getElementById('plan-submit-btn').textContent = 'บันทึกแผนงบประมาณ';
+                document.getElementById('plan-cancel-btn').classList.add('hidden');
+                showMessage(`กรอกแผนงบประมาณสำหรับโครงการ: ${project}`, 'info');
+            }
+        }
+
+        function resetPlanForm() {
+            elements.planForm.reset();
+            document.getElementById('plan-rowId').value = '';
+            document.getElementById('plan-submit-btn').textContent = 'บันทึกแผนงบประมาณ';
+            document.getElementById('plan-cancel-btn').classList.add('hidden');
+        }
+
+        // --- 4. คุมงบประมาณ Logic ---
+        
+        function calculateRemaining() {
+            const commitment = parseFloat(elements.controlCommitment.value) || 0;
+            const actual = parseFloat(elements.controlActual.value) || 0;
+            elements.controlRemaining.value = (commitment - actual).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        }
+
+        function renderControlSummary() {
+            const container = elements.controlSummaryContainer;
+            container.innerHTML = '';
+
+            // 1. Calculate Budget Received for each Project (from Allocation)
+            const receivedMap = new Map();
+            appData.allocation.data.forEach(a => {
+                receivedMap.set(a['โครงการ'], parseFloat(a['งบประมาณ']) || 0);
+            });
+
+            // 2. Aggregate Control data (Used) by Group and Project
+            const groupedData = appData.control.data.reduce((acc, c) => {
+                const group = c['กลุ่มงาน'] || 'ไม่มีกลุ่มงาน';
+                const project = c['โครงการ'];
+                const actual = parseFloat(c['งบประมาณใช้จริง']) || 0;
+                
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(c);
+                
+                return acc;
+            }, {});
+
+            // 3. Render a summary table for each group
+            for (const group in groupedData) {
+                const groupRecords = groupedData[group];
+                
+                // Calculate summary by project within this group
+                const projectSummary = groupRecords.reduce((acc, record) => {
+                    const project = record['โครงการ'];
+                    acc[project] = acc[project] || {
+                        โครงการ: project,
+                        กิจกรรมย่อย: [],
+                        งบที่ใช้ไป: 0,
+                        rowIds: []
+                    };
+                    
+                    acc[project]['กิจกรรมย่อย'].push(record);
+                    acc[project]['งบที่ใช้ไป'] += (parseFloat(record['งบประมาณใช้จริง']) || 0);
+                    acc[project]['rowIds'].push(record.rowId); // Keep rowId for editing
+                    return acc;
+                }, {});
+                
+                const groupTotalReceived = Array.from(receivedMap.entries())
+                    .filter(([proj]) => projectSummary[proj])
+                    .reduce((sum, [_, received]) => sum + received, 0);
+
+                const groupTotalUsed = Object.values(projectSummary).reduce((sum, proj) => sum + proj['งบที่ใช้ไป'], 0);
+                
+                const groupHtml = `
+                    <div class="mb-8 border border-blue-200 rounded-xl overflow-hidden">
+                        <div class="bg-blue-100 p-4 flex justify-between items-center">
+                            <h4 class="text-lg font-bold text-blue-800">กลุ่มงาน: ${group}</h4>
+                            <span class="text-sm font-medium text-blue-600">
+                                งบที่ได้รับรวม: ${groupTotalReceived.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท |
+                                งบที่ใช้ไปรวม: ${groupTotalUsed.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
+                            </span>
+                        </div>
+                        <div class="p-4 overflow-x-auto">
+                            ${Object.values(projectSummary).map(proj => {
+                                const received = receivedMap.get(proj.โครงการ) || 0;
+                                const used = proj['งบที่ใช้ไป'];
+                                const remaining = received - used;
+                                const percentage = received > 0 ? ((used / received) * 100).toFixed(2) : 0;
+                                
+                                return `
+                                    <table class="min-w-full divide-y divide-gray-200 mb-6 border border-gray-300 rounded-lg">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left text-xs font-bold text-blue-700 uppercase tracking-wider" colspan="6">
+                                                    โครงการ: ${proj.โครงการ} 
+                                                    <span class="ml-4 font-normal text-gray-600">
+                                                        (ได้รับ: ${received.toLocaleString('th-TH', { minimumFractionDigits: 2 })} | 
+                                                        ใช้จริง: ${used.toLocaleString('th-TH', { minimumFractionDigits: 2 })} | 
+                                                        คงเหลือ: ${remaining.toLocaleString('th-TH', { minimumFractionDigits: 2 })} | 
+                                                        ใช้จ่าย: ${percentage}%
+                                                        )
+                                                    </span>
+                                                </th>
+                                            </tr>
+                                            <tr class="text-gray-500">
+                                                <th class="px-3 py-2 text-left text-xs font-medium uppercase">แก้ไข</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium uppercase">กิจกรรมที่ดำเนินการ</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium uppercase">หมวดค่าใช้จ่าย</th>
+                                                <th class="px-3 py-2 text-right text-xs font-medium uppercase">ผูกพัน/ตัดงบ</th>
+                                                <th class="px-3 py-2 text-right text-xs font-medium uppercase">งบใช้จริง</th>
+                                                <th class="px-3 py-2 text-right text-xs font-medium uppercase">คงเหลือ (ผูกพัน-ใช้จริง)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            ${proj['กิจกรรมย่อย'].map(act => `
+                                                <tr class="hover:bg-yellow-50">
+                                                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium">
+                                                        <button onclick="editControl(${act.rowId})" class="text-yellow-600 hover:text-yellow-900" title="แก้ไขรายการ">
+                                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-7-7l4 4m-4-4L9 9m10-4a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                                        </button>
+                                                    </td>
+                                                    <td class="px-3 py-2 text-sm text-gray-900">${act['กิจกรรมที่ดำเนินการ']}</td>
+                                                    <td class="px-3 py-2 text-sm text-gray-600">${act['หมวดค่าใช้จ่าย']}</td>
+                                                    <td class="px-3 py-2 text-right text-sm font-medium">${(parseFloat(act['ผูกพัน/ตัดงบ']) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                                    <td class="px-3 py-2 text-right text-sm font-medium text-red-700">${(parseFloat(act['งบประมาณใช้จริง']) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                                    <td class="px-3 py-2 text-right text-sm font-medium text-blue-700">${((parseFloat(act['ผูกพัน/ตัดงบ']) || 0) - (parseFloat(act['งบประมาณใช้จริง']) || 0)).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += groupHtml;
+            }
+        }
+
+        function editControl(rowId) {
+            const controlRecord = appData.control.data.find(c => c.rowId === rowId);
+            if (controlRecord) {
+                document.getElementById('control-rowId').value = rowId;
+                elements.controlProjectSelect.value = controlRecord['โครงการ'];
+                elements.controlForm.elements['กิจกรรมที่ดำเนินการ'].value = controlRecord['กิจกรรมที่ดำเนินการ'];
+                elements.controlGroupSelect.value = controlRecord['กลุ่มงาน'];
+                elements.controlCommitment.value = parseFloat(controlRecord['ผูกพัน/ตัดงบ']) || 0;
+                elements.controlActual.value = parseFloat(controlRecord['งบประมาณใช้จริง']) || 0;
+                elements.controlExpenseSelect.value = controlRecord['หมวดค่าใช้จ่าย'];
+                calculateRemaining();
+                
+                document.getElementById('control-submit-btn').textContent = 'บันทึกแก้ไขรายการ';
+                document.getElementById('control-cancel-btn').classList.remove('hidden');
+                showMessage(`กำลังแก้ไขรายการคุมงบประมาณ Row ID: ${rowId}`, 'info');
+            }
+        }
+        
+        function resetControlForm() {
+            elements.controlForm.reset();
+            document.getElementById('control-rowId').value = '';
+            elements.controlRemaining.value = '';
+            document.getElementById('control-submit-btn').textContent = 'บันทึกคุมงบประมาณ';
+            document.getElementById('control-cancel-btn').classList.add('hidden');
+        }
+
+        // --- 5. Dashboard Logic (D3.js Charts) ---
+
+        function renderDashboard() {
+            // 1. Calculate received vs used per project
+            const budgetData = calculateBudgetMetrics();
+            const totalReceived = budgetData.totalReceived;
+            const totalUsed = budgetData.totalUsed;
+
+            // 2. Chart 1: Budget Type Comparison
+            const chart1Data = [
+                { type: 'งบที่ได้รับ', amount: totalReceived },
+                { type: 'งบที่ใช้ไป', amount: totalUsed }
+            ];
+            drawBarChart('#chart-budget-type', chart1Data, 'type', 'amount', 'งบประมาณ (บาท)', totalReceived * 1.1);
+
+            // 3. Chart 2: Group Comparison
+            const chart2Data = Object.keys(budgetData.byGroup).map(group => ({
+                group: group,
+                received: budgetData.byGroup[group].received,
+                used: budgetData.byGroup[group].used
+            }));
+            drawStackedBarChart('#chart-group-comparison', chart2Data, 'group', ['received', 'used'], 'กลุ่มงาน', 'งบประมาณ (บาท)');
+
+            // 4. Chart 3: Plan Comparison (ใช้ 'แผนงาน' จาก allocation)
+            const chart3Data = Object.keys(budgetData.byPlan).map(plan => ({
+                plan: plan,
+                received: budgetData.byPlan[plan].received,
+                used: budgetData.byPlan[plan].used
+            }));
+            drawStackedBarChart('#chart-plan-comparison', chart3Data, 'plan', ['received', 'used'], 'แผนงาน', 'งบประมาณ (บาท)');
+        }
+
+        function calculateBudgetMetrics() {
+            let totalReceived = 0;
+            let totalUsed = 0;
+            const byGroup = {};
+            const byPlan = {};
+
+            // Calculate budget received from Allocation
+            appData.allocation.data.forEach(alloc => {
+                const received = parseFloat(alloc['งบประมาณ']) || 0;
+                const group = alloc['กลุ่มงาน'] || 'ไม่ระบุกลุ่ม';
+                const plan = alloc['แผนงาน'] || 'ไม่ระบุแผน';
+
+                totalReceived += received;
+
+                byGroup[group] = byGroup[group] || { received: 0, used: 0 };
+                byPlan[plan] = byPlan[plan] || { received: 0, used: 0 };
+
+                byGroup[group].received += received;
+                byPlan[plan].received += received;
+            });
+
+            // Calculate budget used from Control
+            appData.control.data.forEach(control => {
+                const used = parseFloat(control['งบประมาณใช้จริง']) || 0;
+                const project = control['โครงการ'];
+                const group = control['กลุ่มงาน'] || 'ไม่ระบุกลุ่ม';
+                
+                // Find related plan from allocation data
+                const relatedAlloc = appData.allocation.data.find(a => a['โครงการ'] === project);
+                const plan = relatedAlloc ? (relatedAlloc['แผนงาน'] || 'ไม่ระบุแผน') : 'ไม่ระบุแผน';
+
+                totalUsed += used;
+
+                byGroup[group] = byGroup[group] || { received: 0, used: 0 };
+                byPlan[plan] = byPlan[plan] || { received: 0, used: 0 };
+
+                byGroup[group].used += used;
+                byPlan[plan].used += used;
+            });
+
+            return { totalReceived, totalUsed, byGroup, byPlan };
+        }
+        
+        // Simple D3 Bar Chart Function
+        function drawBarChart(selector, data, xKey, yKey, yLabel, customYMax = null) {
+            d3.select(selector).select("svg").remove(); // Clear previous chart
+
+            if (data.length === 0) {
+                 d3.select(selector).html('<p class="text-center text-gray-500">ไม่มีข้อมูลสำหรับแสดง</p>');
+                 return;
+            }
+
+            const margin = {top: 20, right: 30, bottom: 60, left: 100},
+                width = document.querySelector(selector).offsetWidth - margin.left - margin.right,
+                height = 400 - margin.top - margin.bottom;
+
+            const svg = d3.select(selector)
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .range([0, width])
+                .domain(data.map(d => d[xKey]))
+                .padding(0.2);
+
+            const yMax = customYMax || d3.max(data, d => d[yKey]);
+            const y = d3.scaleLinear()
+                .domain([0, yMax])
+                .range([height, 0]);
+
+            // X-axis
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-45)");
+
+            // Y-axis
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d3.format(".2s"))); // Use SI prefix for large numbers
+
+            // Y-axis Label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left + 15)
+                .attr("x", 0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .text(yLabel);
+
+            // Bars
+            svg.selectAll("mybar")
+                .data(data)
+                .join("rect")
+                .attr("x", d => x(d[xKey]))
+                .attr("y", height)
+                .attr("width", x.bandwidth())
+                .attr("height", 0)
+                .attr("fill", (d, i) => i === 0 ? "#3b82f6" : "#ef4444") // Blue for received, Red for used
+                .transition()
+                .duration(800)
+                .attr("y", d => y(d[yKey]))
+                .attr("height", d => height - y(d[yKey]));
+
+            // Data Labels on bars
+            svg.selectAll(".bar-label")
+                .data(data)
+                .join("text")
+                .attr("class", "bar-label")
+                .attr("x", d => x(d[xKey]) + x.bandwidth() / 2)
+                .attr("y", d => y(d[yKey]) - 5)
+                .attr("text-anchor", "middle")
+                .text(d => d[yKey].toLocaleString('th-TH', { maximumFractionDigits: 0 }))
+                .style("font-size", "12px");
+        }
+
+        // D3 Stacked Bar Chart Function for comparison (Received vs Used)
+        function drawStackedBarChart(selector, data, xKey, seriesKeys, xLabel, yLabel) {
+            d3.select(selector).select("svg").remove(); // Clear previous chart
+            
+             if (data.length === 0) {
+                 d3.select(selector).html('<p class="text-center text-gray-500">ไม่มีข้อมูลสำหรับแสดง</p>');
+                 return;
+            }
+
+            const margin = {top: 20, right: 30, bottom: 120, left: 100},
+                width = document.querySelector(selector).offsetWidth - margin.left - margin.right,
+                height = 400 - margin.top - margin.bottom;
+
+            const svg = d3.select(selector)
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            // Reformat data for stacking
+            const series = d3.stack().keys(seriesKeys)(data);
+            
+            const x = d3.scaleBand()
+                .range([0, width])
+                .domain(data.map(d => d[xKey]))
+                .padding(0.2);
+
+            const yMax = d3.max(series, s => d3.max(s, d => d[0] + d[1]));
+            const y = d3.scaleLinear()
+                .domain([0, yMax])
+                .range([height, 0]);
+            
+            const color = d3.scaleOrdinal()
+                .domain(seriesKeys)
+                .range(["#3b82f6", "#ef4444"]); // Blue for received, Red for used
+
+            // X-axis
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-45)");
+
+            // Y-axis
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d3.format(".2s")));
+
+            // Y-axis Label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left + 15)
+                .attr("x", 0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .text(yLabel);
+
+            // Bars
+            svg.append("g")
+                .selectAll("g")
+                .data(series)
+                .join("g")
+                    .attr("fill", d => color(d.key))
+                .selectAll("rect")
+                .data(d => d)
+                .join("rect")
+                    .attr("x", d => x(d.data[xKey]))
+                    .attr("y", height)
+                    .attr("width", x.bandwidth())
+                    .attr("height", 0)
+                .transition()
+                .duration(800)
+                    .attr("y", d => y(d[1]))
+                    .attr("height", d => y(d[0]) - y(d[1]));
+            
+            // Legend
+            const legend = svg.append("g")
+                .attr("font-family", "sans-serif")
+                .attr("font-size", 10)
+                .attr("text-anchor", "start")
+                .selectAll("g")
+                .data(seriesKeys.slice().reverse()) // Reverse for received then used
+                .join("g")
+                .attr("transform", (d, i) => `translate(0,${i * 20})`);
+
+            legend.append("rect")
+                .attr("x", width - 18)
+                .attr("width", 18)
+                .attr("height", 18)
+                .attr("fill", color);
+
+            legend.append("text")
+                .attr("x", width - 24)
+                .attr("y", 9)
+                .attr("dy", "0.35em")
+                .text(d => d === 'received' ? 'งบที่ได้รับ' : 'งบที่ใช้ไป');
+        }
+
+        // --- 7. Export to Excel (CSV) ---
+
+        function exportTableToCSV(tableID, filename) {
+            const table = document.getElementById(tableID);
+            if (!table) {
+                showMessage('ไม่พบตารางที่ต้องการส่งออก', 'error');
+                return;
+            }
+
+            const rows = table.querySelectorAll('tr');
+            let csv = [];
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const cols = row.querySelectorAll('th, td');
+                let rowData = [];
+
+                for (let j = 0; j < cols.length; j++) {
+                    let cell = cols[j].innerText;
+                    // Skip 'แก้ไข' column
+                    if (i === 0 && cell === 'แก้ไข') continue; 
+                    if (row.parentNode.tagName === 'TBODY' && j === 0) continue; 
+                    
+                    // Sanitize data and replace commas for CSV
+                    cell = cell.replace(/"/g, '""');
+                    if (cell.includes(',') || cell.includes('\n')) {
+                        cell = `"${cell}"`;
+                    }
+                    rowData.push(cell);
+                }
+                csv.push(rowData.join(','));
+            }
+
+            // Download CSV
+            const csvString = csv.join('\n');
+            const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage(`ส่งออกข้อมูลเป็น "${filename}" เรียบร้อยแล้ว`);
+        }
+
+
+        // --- Event Listeners and Initial Load ---
+        
+        elements.notifyForm.addEventListener('submit', (e) => handleFormSubmit(e, 'save_allocation_request', 'บันทึกแจ้งจัดสรรสำเร็จ'));
+        elements.allocateForm.addEventListener('submit', (e) => handleFormSubmit(e, 'save_allocation', 'บันทึกจัดสรรงบประมาณสำเร็จ'));
+        elements.planForm.addEventListener('submit', (e) => {
+            const action = e.target.elements.rowId.value ? 'update_planning' : 'save_planning';
+            const msg = action.includes('update') ? 'บันทึกแก้ไขแผนงบประมาณสำเร็จ' : 'บันทึกแผนงบประมาณสำเร็จ';
+            handleFormSubmit(e, action, msg);
+        });
+        elements.controlForm.addEventListener('submit', (e) => {
+            const action = e.target.elements.rowId.value ? 'update_control' : 'save_control';
+            const msg = action.includes('update') ? 'บันทึกแก้ไขรายการคุมงบประมาณสำเร็จ' : 'บันทึกคุมงบประมาณสำเร็จ';
+            handleFormSubmit(e, action, msg);
+        });
+        
+        // Auto-calculate remaining budget in Control form
+        elements.controlCommitment.addEventListener('input', calculateRemaining);
+        elements.controlActual.addEventListener('input', calculateRemaining);
+
+        // Initial Load
+        window.onload = () => {
+             if (GAS_WEB_APP_URL === 'https://script.google.com/macros/s/AKfycbyR8DyQobnNmFOxcqWzXxI5QCfvfs0_fM_frcjw774vNgGcufwQTFT2gDVt2aKeTDES/exec') {
+                showMessage("🚨 กรุณาแทนที่ 'YOUR_GAS_WEB_APP_URL_HERE' ด้วย URL ของ Google Apps Script Web App ที่ Deploy แล้ว", 'error');
+                return;
+             }
+             fetchData();
+        };
+        
+        // Ensure initial view is set
+        showView('notify');
+
+    </script>
+</body>
+</html>
